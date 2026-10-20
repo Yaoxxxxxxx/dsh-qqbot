@@ -1347,6 +1347,30 @@ function apply(ctx) {
     ctx?.logger?.warn?.(`[qqbot] config init failed: ${String(e)}`);
   }
 
+  // 插件加载后自动检查服务（AstrBot/后台组件），缺的静默拉起（不碰 NapCat 以免弹 UAC）
+  setTimeout(async () => {
+    try {
+      const c = cfg();
+      if (!(await portOpen(c.astrbotWsPort))) {
+        const l = astrbotLauncherPath();
+        if (existsSync(l)) {
+          spawn("wscript.exe", ["//B", l], { cwd: c.astrbotDir, windowsHide: true, detached: true, stdio: "ignore" }).unref();
+          log("auto-start: AstrBot");
+        }
+      }
+      const cmdlines = await listComponents().catch(() => "");
+      for (const key of Object.keys(c.components || {})) {
+        const abs = scriptPath(key);
+        if (!abs || !existsSync(abs) || compRunning(cmdlines, abs)) continue;
+        const py0 = key === "bridge" || key === "watchdog" ? c.astrbotPython || "python" : c.pythonPath || "python";
+        spawn(pythonwOf(py0), [abs], { cwd: scriptCwd(key), windowsHide: true, detached: true, stdio: "ignore" }).unref();
+        log("auto-start: " + key);
+      }
+    } catch (e) {
+      ctx?.logger?.warn?.(`[qqbot] auto-start failed: ${String(e)}`);
+    }
+  }, 10000);
+
   // HTTP 路由
   const web = ctx?.webServer ?? (typeof ctx?.get === "function" ? ctx.get("webServer") : null);
   const sendJson = (res, code, obj) => {
