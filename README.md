@@ -137,3 +137,16 @@ NapCat 的启动器（`launcher.bat`）需要管理员权限。插件启动时�
 4. 如果 `package.json` 依赖变了：profile 目录 `pnpm install`
 5. 重启 DSH
 6. 打开 设置 → QQBOT 确认版本和自检
+---
+
+## 🧩 可选：MCP 扩展（日程 / 记忆 / 提醒）
+
+如果你想让 BOT 能「记日程、查记忆、到点提醒」，需要装 `extras/` 里的 MCP 扩展（9 个工具）。
+
+- **用户版说明**：`extras/README-用户版.md`（大白话，3 步装好）
+- **AI Agent 版说明**：`extras/README-Agent版.md`（整段复制给 AI 助手，它会帮你装）
+
+**不装**：插件管理功能 + 聊天都正常，只是 BOT 不会记事。
+**装了**：BOT 能记日程、查历史、按时提醒。
+
+MCP 文件：`extras/mcp_xiaojing.py`（薄包装）+ `extras/mcp_core.py`（核心逻辑，已做路径通用化，用环境变量 `XIAOJING_BASE` 指定数据目录）。
