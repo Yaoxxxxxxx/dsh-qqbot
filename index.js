@@ -985,7 +985,8 @@ async function listPersonas() {
   try {
     const r = await run(c.astrbotPython || "python", [
       "-c",
-      `import sqlite3,json,re
+      `import sqlite3,json,re,sys
+sys.stdout.reconfigure(encoding='utf-8')
 con=sqlite3.connect(r"${db}")
 rows=con.execute("SELECT persona_id, system_prompt FROM personas").fetchall()
 out=[]
