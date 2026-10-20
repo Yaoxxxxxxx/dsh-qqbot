@@ -104,3 +104,36 @@ NapCat 的启动器（`launcher.bat`）需要管理员权限。插件启动时�
 | --- | --- | --- |
 | 需要安全验证（验证码） | 腾讯风控 | 浏览器打开 `http://127.0.0.1:6099`，在 NapCat WebUI 完成验证码登录 |
 | `login rate limit` | NapCat 登录频率限制 | 等 1 分钟；插件已加凭据缓存，正常不会触发 || 登录系统连接异常，正在重新连接 | QQ 内核初始化/网络重连中 | 等 10 到 20 秒重试；持续则停止再启动服务 |
+---
+
+## 🤖 给 AI Agent 的安装指令（复制这段发给你的 AI 助手）
+
+如果你不想自己一步步装，把下面这段**整段复制**发给你的 AI 助手（Claude/ChatGPT/Cursor 等）：
+
+> 请帮我安装 DSH 插件 dsh-qqbot（一个 QQBOT 管理插件）：
+> 1. 把插件目录放到 `<DSH_HOME>\local-plugins\dsh-qqbot`（DSH_HOME 默认 `%USERPROFILE%\.dsh`）
+> 2. 编辑 `<DSH_HOME>\profiles\<profile>\package.json`：`dependencies` 里加 `"dsh-qqbot": "link:<插件绝对路径>"`，`dsh.profile.bundles` 里加 `"dsh-qqbot"`
+> 3. 编辑 `<DSH_HOME>\profiles\<profile>\cordis.patch.yml`：末尾加
+>    ```
+>    - insert:
+>        - id: qqbot
+>          name: dsh-qqbot
+>    ```
+> 4. 在 profile 目录执行 `pnpm install`
+> 5. 正常重启 DSH（关闭再打开）
+> 6. 打开 DSH 设置 → QQBOT，先看「环境自检」；缺 AstrBot/NapCat/python 时点「安装提示词」，把生成的提示词复制回来给我继续装
+
+**提示词按钮（插件内保底）**：
+- 「**安装提示词**」：环境不完整时生成安装指导（AstrBot/NapCat/QQ/python 装哪、装完怎么填路径）
+- 「**更新提示词**」：插件有新版本时生成更新步骤（备份、覆盖、pnpm install、重启）
+
+两个按钮生成的文本都可以**直接复制**给 AI Agent 执行。
+
+## 🔄 更新插件
+
+1. 从 GitHub 拉最新代码（或下载 zip 解压覆盖）
+2. 备份原插件目录（复制一份 .bak-日期）
+3. 覆盖文件（配置 `~/.dsh/qqbot/config.json` 不受影响）
+4. 如果 `package.json` 依赖变了：profile 目录 `pnpm install`
+5. 重启 DSH
+6. 打开 设置 → QQBOT 确认版本和自检

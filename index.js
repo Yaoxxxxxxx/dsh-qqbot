@@ -416,6 +416,32 @@ function envCheck() {
   return { ok, checks };
 }
 
+/** 生成「给 Agent 阅读并操作」的插件更新提示词（面板可复制）。 */
+function buildUpdatePrompt() {
+  let version = "unknown";
+  try {
+    version = JSON.parse(readFileSync(join(PLUGIN_ROOT, "package.json"), "utf-8")).version || "unknown";
+  } catch {}
+  const pluginDir = PLUGIN_ROOT;
+  return `请帮我更新 DSH 插件 dsh-qqbot（当前版本 ${version}）。
+
+## 仓库
+https://github.com/Yaoxxxxxxx/dsh-qqbot
+
+## 步骤
+1. 从仓库获取最新版本（git pull，或下载 main 分支 zip 解压）
+2. 备份当前插件目录：${pluginDir}（复制到同目录 .bak-<日期>）
+3. 用新版本文件覆盖插件目录（注意保留 package.json 里的字段，其他文件直接覆盖）
+4. 如 package.json 的 dependencies 有变化，在 DSH 的 profile 目录执行 pnpm install
+5. 正常重启 DSH（关闭再打开，不要 Ctrl+R 刷新）
+6. 打开 DSH 设置 → QQBOT，确认版本和功能正常（检查「环境自检」全部绿色）
+
+## 注意事项
+- 插件配置在 ${join(DSH_HOME, "qqbot", "config.json")}，更新时不需动它
+- 更新前别动正在运行的服务；更新完再点「启动全部服务」
+- 如果更新后界面没变化，检查 profile 的 package.json 里是否仍 link 到本插件目录`;
+}
+
 /** 根据缺失的环境项，生成一段「给别的 Agent 阅读并操作」的安装指导提示词。 */
 function buildInstallPrompt(env) {
   const missing = Object.entries(env.checks)
@@ -531,6 +557,41 @@ async function listQqPids() {
     .filter((x) => Number.isFinite(x) && x > 0);
 }
 
+/** 检查 AstrBot 的反向 ws 端口（6199）有没有 NapCat 连进来（AstrBot 重启后 NapCat 不会自动重连）。 */
+async function wsConnected() {
+  const c = cfg();
+  const port = c.astrbotWsPort || 6199;
+  const r = await run("powershell", [
+    "-NoProfile",
+    "-Command",
+    `Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq ${port} -or $_.RemotePort -eq ${port} } | Measure-Object | Select-Object -ExpandProperty Count`,
+  ]);
+  return (Number((r.out || "0").trim()) || 0) > 0;
+}
+
+/** 重启 NapCat（让 NapCat 重新连 AstrBot 的 ws）；最多等 60 秒确认连上。 */
+async function restartNapcat() {
+  // 杀所有 NapCat 启动器（不管有没有保护，先普通杀，杀不掉再管理员）
+  await run("powershell", [
+    "-NoProfile",
+    "-Command",
+    "Get-Process NapCatWinBootMain -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+  ]);
+  await new Promise((res) => setTimeout(res, 3000));
+  const taskName = await ensureNapcatTask().catch(() => "");
+  if (taskName) {
+    try {
+      await run("schtasks", ["/run", "/tn", taskName]);
+    } catch {}
+  }
+  // 等 ws 连上
+  for (let i = 0; i < 20; i++) {
+    await new Promise((res) => setTimeout(res, 3000));
+    if (await wsConnected()) return true;
+  }
+  return false;
+}
+
 async function startAll() {
   const c = cfg();
   const r = {};
@@ -622,6 +683,12 @@ async function startAll() {
   } else {
     r.astrbot = "already-running";
   }
+  // AstrBot 重启后 NapCat 的反向 ws 不会自动重连（BOT 静默失联的真凶）→ 自动重启 NapCat 恢复
+  if ((await portOpen(c.astrbotWsPort)) && !(await wsConnected())) {
+    r.wsRecover = (await restartNapcat())
+      ? "AstrBot 的 ws 已断开，已重启 NapCat 恢复连接"
+      : "ws 恢复失败（NapCat 可能还没就绪，稍后再点启动）";
+  }
   // 组件脚本（静默：python 用 pythonw，python.exe 也隐藏窗口 + 忽略 stdio）
   const cmdlines = await listComponents().catch(() => "");
   for (const key of Object.keys(c.components || {})) {
@@ -697,14 +764,18 @@ async function stopAll() {
   const psContent = [
     botPid ? `$botPid = ${botPid}` : "$botPid = 0",
     botPid ? `if ($botPid -gt 0 -and (Get-Process -Id $botPid -ErrorAction SilentlyContinue)) { taskkill /T /F /PID $botPid 2>$null | Out-Null }` : "",
-    "$nap = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'NapCatWinBootMain.exe' }",
-    "$nap | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
-    "$qqs = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'QQ.exe' }",
-    "foreach ($q in $qqs) {",
-    "  $p = $null",
-    "  try { $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $q.ParentProcessId) -ErrorAction SilentlyContinue } catch {}",
-    "  if (-not $p) { Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue }",
-    "  elseif ($p.Name -eq 'NapCatWinBootMain.exe') { Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "# 循环 3 轮清干净（NapCat 有保护、父进程杀后子进程变孤儿，单轮清不完）",
+    "for ($i = 0; $i -lt 3; $i++) {",
+    "  $nap = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'NapCatWinBootMain.exe' }",
+    "  $nap | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "  $qqs = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'QQ.exe' }",
+    "  foreach ($q in $qqs) {",
+    "    $p = $null",
+    "    try { $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $q.ParentProcessId) -ErrorAction SilentlyContinue } catch {}",
+    "    if (-not $p) { Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "    elseif ($p.Name -eq 'NapCatWinBootMain.exe') { Stop-Process -Id $q.ProcessId -Force -ErrorAction SilentlyContinue }",
+    "  }",
+    "  Start-Sleep -Milliseconds 800",
     "}",
   ]
     .filter(Boolean)
@@ -1146,6 +1217,21 @@ function apply(ctx) {
               return;
             }
             if (p === "/qqbot/persona" && m === "GET") return sendJson(res, 200, await personaGet());
+            if (p === "/qqbot/update" && m === "GET") {
+              let version = "unknown";
+              try {
+                version = JSON.parse(readFileSync(join(PLUGIN_ROOT, "package.json"), "utf-8")).version || "unknown";
+              } catch {}
+              return sendJson(res, 200, { version, prompt: buildUpdatePrompt() });
+            }
+            if (p === "/qqbot/install" && m === "GET") {
+              const env = envCheck();
+              return sendJson(res, 200, {
+                ok: env.ok,
+                checks: env.checks,
+                prompt: env.ok ? "环境已完整，无需安装指引。" : buildInstallPrompt(env),
+              });
+            }
             if (p === "/qqbot/persona" && m === "POST") {
               let body = "";
               req.on("data", (d) => (body += d));

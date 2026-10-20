@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
     function QQBOTSection() {
       const [status, setStatus] = React.useState(null);
       const [persona, setPersona] = React.useState('');
+      const [updPrompt, setUpdPrompt] = React.useState('');
+      const [instPrompt, setInstPrompt] = React.useState('');
       const [notice, setNotice] = React.useState('');
       const [busy, setBusy] = React.useState(false);
       const [faqText, setFaqText] = React.useState('');
@@ -148,6 +150,30 @@ window.__ModuleLoader__.load({
         setBusy(false);
       };
 
+      const loadInstallPrompt = async () => {
+        setBusy(true);
+        const r = await fetchJson('/qqbot/install');
+        if (r && r.prompt) {
+          setInstPrompt(r.prompt);
+          setNotice(r.ok ? '环境已完整（提示词仍可复制备用）' : '已生成安装提示词，可复制给 Agent');
+        } else {
+          setNotice('获取安装提示词失败');
+        }
+        setBusy(false);
+      };
+
+      const loadUpdatePrompt = async () => {
+        setBusy(true);
+        const r = await fetchJson('/qqbot/update');
+        if (r && r.prompt) {
+          setUpdPrompt(r.prompt);
+          setNotice('已生成更新提示词（版本 ' + (r.version || '?') + '），可复制给 Agent');
+        } else {
+          setNotice('获取更新提示词失败');
+        }
+        setBusy(false);
+      };
+
       const act = async (url, label) => {
         setBusy(true);
         setNotice(label + '…');
@@ -243,6 +269,8 @@ window.__ModuleLoader__.load({
           btn('停止全部服务', () => act('/qqbot/stop', '停止')),
           btn('立即备份', () => act('/qqbot/backup', '备份')),
           btn('刷新登录状态', loadLogin),
+          btn('更新提示词', loadUpdatePrompt),
+          btn('安装提示词', loadInstallPrompt),
         ]),
         status && status.env && status.env.checks
           ? h('div', { key: 'env', style: { display: 'flex', flexDirection: 'column', gap: 2 } }, [
@@ -261,6 +289,28 @@ window.__ModuleLoader__.load({
                 readOnly: true,
                 value: status.env.installPrompt,
                 style: { width: '100%', minHeight: 160, fontSize: 12, lineHeight: '18px', fontFamily: 'inherit', padding: 8 },
+              }),
+            ])
+          : null,
+        instPrompt
+          ? h('div', { key: 'instprompt', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+              h('div', { key: 'ish', style: { fontSize: 13, fontWeight: 600 } }, '环境安装提示词（复制给 Agent 让它帮你装）'),
+              h('textarea', {
+                key: 'ist',
+                readOnly: true,
+                value: instPrompt,
+                style: { width: '100%', minHeight: 140, fontSize: 12, lineHeight: '18px', fontFamily: 'inherit', padding: 8 },
+              }),
+            ])
+          : null,
+        updPrompt
+          ? h('div', { key: 'updprompt', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+              h('div', { key: 'uh', style: { fontSize: 13, fontWeight: 600 } }, '插件更新提示词（复制给 Agent 让它帮你更新）'),
+              h('textarea', {
+                key: 'ut',
+                readOnly: true,
+                value: updPrompt,
+                style: { width: '100%', minHeight: 140, fontSize: 12, lineHeight: '18px', fontFamily: 'inherit', padding: 8 },
               }),
             ])
           : null,
