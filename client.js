@@ -19,6 +19,7 @@ window.__ModuleLoader__.load({
       const [persona, setPersona] = React.useState('');
       const [updPrompt, setUpdPrompt] = React.useState('');
       const [memInfo, setMemInfo] = React.useState(null);
+      const [personaList, setPersonaList] = React.useState([]);
       const [instPrompt, setInstPrompt] = React.useState('');
       const [notice, setNotice] = React.useState('');
       const [busy, setBusy] = React.useState(false);
@@ -188,6 +189,24 @@ window.__ModuleLoader__.load({
       const loadMemInfo = async () => {
         const r = await fetchJson('/qqbot/persona/memory');
         if (r) setMemInfo(r);
+        const pl = await fetchJson('/qqbot/personas');
+        if (Array.isArray(pl)) setPersonaList(pl);
+      };
+
+      const switchPersona = async (id) => {
+        setBusy(true);
+        setNotice('切换人格中（会重启 AstrBot）…');
+        const r = await fetchJson('/qqbot/persona/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+        setNotice(r && r.ok ? r.message : '切换失败：' + JSON.stringify(r).slice(0, 150));
+        setBusy(false);
+      };
+
+      const clearPersonaMem = async (name) => {
+        setBusy(true);
+        const r = await fetchJson('/qqbot/persona/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        setNotice(r && r.ok ? ('已清除「' + (r.name || name) + '」的记忆' + (r.current ? '（当前历史）' : '（存档）')) : '清除失败');
+        await loadMemInfo();
+        setBusy(false);
       };
 
       const clearMem = async () => {
@@ -408,6 +427,19 @@ window.__ModuleLoader__.load({
           h('div', { key: 'pmbtns', style: { display: 'flex', gap: 8 } }, [
             btn('清除该人格记忆', clearMem),
           ]),
+          personaList.length
+            ? h('div', { key: 'plist', style: { display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 } }, [
+                h('div', { key: 'plh', style: { fontSize: 12, fontWeight: 600 } }, '人格管理（一键切换）'),
+                ...personaList.map((pp) =>
+                  h('div', { key: 'pl-' + pp.id, style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
+                    h('span', { key: 'pn', style: { fontSize: 12, minWidth: 80, color: (memInfo && memInfo.name === pp.name) ? '#6fcf97' : undefined } },
+                      pp.name + ((memInfo && memInfo.name === pp.name) ? '（当前）' : '')),
+                    btn('切换', () => switchPersona(pp.id)),
+                    btn('清记忆', () => clearPersonaMem(pp.name)),
+                  ]),
+                ),
+              ])
+            : null,
           h('div', { key: 'ph', style: { fontSize: 13, fontWeight: 600 } }, '人设（保存后重启 AstrBot 生效）'),
           h('textarea', {
             key: 'ta',
