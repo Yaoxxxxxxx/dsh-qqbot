@@ -928,11 +928,79 @@ print(row[1] if row else "")`,
   ]).then((r) => ({ persona_id: c.personaId, system_prompt: r.out || "" }));
 }
 
-function personaSave(systemPrompt) {
+/** 从 persona 文本提取人格名（「你是X」「姓名: X」「名字: X」）。 */
+function personaNameOf(text) {
+  if (!text) return "";
+  const patterns = [/你是\s*([^\s，,。.!！?？]{1,12})/, /姓名[:：]\s*([^\s，,。]{1,12})/, /名字[:：]\s*([^\s，,。]{1,12})/];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m && m[1]) return m[1];
+  }
+  return "default";
+}
+
+/** 调 persona_memory.py（snapshot/restore/clear/info），实现 per-persona 记忆隔离。 */
+async function personaMemoryRun(mode, name = "") {
+  const c = cfg();
+  const script = join(c.astrbotDir, "persona_memory.py");
+  if (!existsSync(script)) return "";
+  const args = [script, mode];
+  if (name) args.push(name);
+  const r = await run(c.astrbotPython || "python", args);
+  return (r.out || "").trim();
+}
+
+/** 读当前 AstrBot persona 文本（供取名用）。 */
+async function currentPersonaText() {
+  const c = cfg();
+  const db = astrbotDb();
+  if (!existsSync(db)) return "";
+  try {
+    const r = await run(c.astrbotPython || "python", [
+      "-c",
+      `import sqlite3
+con=sqlite3.connect(r"${db}")
+r=con.execute("SELECT system_prompt FROM personas WHERE persona_id=?", (${JSON.stringify(c.personaId)},)).fetchone()
+print(r[0] if r else "")`,
+    ]);
+    return (r.out || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** 当前人格记忆信息（名 / 存档）。 */
+async function personaMemoryInfo() {
+  const c = cfg();
+  const oldName = personaNameOf(await currentPersonaText());
+  const archive = await personaMemoryRun("info", oldName || c.personaId);
+  return { personaId: c.personaId, name: oldName || c.personaId, archive };
+}
+
+/** 清除当前人格的记忆（对话历史）。 */
+async function personaMemoryClear() {
+  const oldName = personaNameOf(await currentPersonaText());
+  const r = await personaMemoryRun("clear");
+  return { ok: true, name: oldName || "default", detail: r };
+}
+
+async function personaSave(systemPrompt) {
   const c = cfg();
   const db = astrbotDb();
   if (!existsSync(db)) return Promise.resolve({ ok: false, message: "找不到 AstrBot 数据库: " + db });
   const py = c.astrbotPython || "python";
+  // per-persona 记忆隔离：人格名变化时，旧人格记忆存档 → 清空 → 恢复新人格记忆
+  const oldName = personaNameOf(await currentPersonaText());
+  const newName = personaNameOf(systemPrompt);
+  let memoryNote = "";
+  try {
+    if (oldName && newName && oldName !== newName) {
+      await personaMemoryRun("snapshot", oldName);
+      await personaMemoryRun("clear");
+      const restored = await personaMemoryRun("restore", newName);
+      memoryNote = `（人格切换：「${oldName}」记忆已存档，「${newName}」${restored.includes("无存档") ? "记忆为空" : "记忆已恢复"}）`;
+    }
+  } catch {}
   return run(py, [
     "-c",
     `import sqlite3,shutil,datetime
@@ -946,7 +1014,7 @@ print("saved")`,
     if (!r.out.includes("saved")) return { ok: false, message: r.err || r.out };
     const l = astrbotLauncherPath();
     if (existsSync(l)) spawn("wscript.exe", ["//B", l], { cwd: c.astrbotDir, windowsHide: true, detached: true, stdio: "ignore" }).unref();
-    return { ok: true, message: "已保存并重启 AstrBot（下一轮生效）" };
+    return { ok: true, message: "已保存并重启 AstrBot（下一轮生效）" + memoryNote };
   });
 }
 
@@ -1305,6 +1373,8 @@ function apply(ctx) {
               const ok = await restartAstrbot();
               return sendJson(res, 200, { ok, message: ok ? "AstrBot 已重启" : "重启失败" });
             }
+            if (p === "/qqbot/persona/memory" && m === "GET") return sendJson(res, 200, await personaMemoryInfo());
+            if (p === "/qqbot/persona/memory" && m === "POST") return sendJson(res, 200, await personaMemoryClear());
             if (p === "/qqbot/update" && m === "GET") {
               let version = "unknown";
               try {

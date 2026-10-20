@@ -18,6 +18,7 @@ window.__ModuleLoader__.load({
       const [status, setStatus] = React.useState(null);
       const [persona, setPersona] = React.useState('');
       const [updPrompt, setUpdPrompt] = React.useState('');
+      const [memInfo, setMemInfo] = React.useState(null);
       const [instPrompt, setInstPrompt] = React.useState('');
       const [notice, setNotice] = React.useState('');
       const [busy, setBusy] = React.useState(false);
@@ -52,6 +53,7 @@ window.__ModuleLoader__.load({
         refresh();
         loadConfig();
         fetchJson('/qqbot/persona').then((p) => {
+        loadMemInfo();
           if (p && typeof p.system_prompt === 'string') setPersona(p.system_prompt);
         });
         loadFaq();
@@ -181,6 +183,20 @@ window.__ModuleLoader__.load({
         setNotice(r && r.ok ? 'AstrBot 已重启' : '重启失败：' + JSON.stringify(r).slice(0, 120));
         setBusy(false);
         setTimeout(refresh, 3000);
+      };
+
+      const loadMemInfo = async () => {
+        const r = await fetchJson('/qqbot/persona/memory');
+        if (r) setMemInfo(r);
+      };
+
+      const clearMem = async () => {
+        setBusy(true);
+        setNotice('清除记忆中…');
+        const r = await fetchJson('/qqbot/persona/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        setNotice(r && r.ok ? '记忆已清除（' + (r.name || '') + '）' : '清除失败');
+        await loadMemInfo();
+        setBusy(false);
       };
 
       const act = async (url, label) => {
@@ -385,6 +401,13 @@ window.__ModuleLoader__.load({
           ]),
         ]),
         h('div', { key: 'persona', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+          h('div', { key: 'pmhint', style: { fontSize: 11, color: '#e06c75', fontWeight: 600 } },
+            '⚠️ 切换人格会自动切换记忆（当前关联记忆：' + ((memInfo && memInfo.name) || '读取中…') + '）'),
+          h('div', { key: 'pminfo', style: { fontSize: 11, opacity: 0.7 } },
+            '记忆存档：' + ((memInfo && memInfo.archive) || '无')),
+          h('div', { key: 'pmbtns', style: { display: 'flex', gap: 8 } }, [
+            btn('清除该人格记忆', clearMem),
+          ]),
           h('div', { key: 'ph', style: { fontSize: 13, fontWeight: 600 } }, '人设（保存后重启 AstrBot 生效）'),
           h('textarea', {
             key: 'ta',
