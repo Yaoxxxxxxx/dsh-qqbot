@@ -619,12 +619,22 @@ else:
 async function restartNapcat() {
   // 先把 ws url 修正为 AstrBot 4.29 的 /ws 路径（旧配置可能缺 /ws → 405）
   await fixNapcatWsUrl().catch(() => {});
-  // 杀所有 NapCat 启动器（不管有没有保护，先普通杀，杀不掉再管理员）
-  await run("powershell", [
-    "-NoProfile",
-    "-Command",
-    "Get-Process NapCatWinBootMain -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
-  ]);
+  // 杀 NapCat 树 + 孤儿 BOT QQ（管理员，避免残留进程打架）
+  const psPath = join(tmpdir(), "qqbot_napcat_clean.ps1");
+  const ps = [
+    "taskkill /T /F /IM NapCatWinBootMain.exe 2>$null | Out-Null",
+    "$qqs = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'QQ.exe' }",
+    "foreach ($q in $qqs) {",
+    "  $p = $null",
+    "  try { $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $q.ParentProcessId) -ErrorAction SilentlyContinue } catch {}",
+    "  if (-not $p -or $p.Name -eq 'NapCatWinBootMain.exe') { taskkill /T /F /PID $q.ProcessId 2>$null | Out-Null }",
+    "}",
+  ].join("\r\n");
+  try {
+    writeFileSync(psPath, ps, "utf-8");
+    await run("powershell", ["-NoProfile", "-Command", `Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','${psPath}' -Wait`]);
+  } catch {}
+  try { unlinkSync(psPath); } catch {}
   await new Promise((res) => setTimeout(res, 3000));
   const taskName = await ensureNapcatTask().catch(() => "");
   if (taskName) {
@@ -646,7 +656,7 @@ async function restartAstrbot() {
   await run("powershell", [
     "-NoProfile",
     "-Command",
-    "Get-Process astrbot -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+    "taskkill /T /F /IM astrbot.exe 2>$null | Out-Null; Start-Sleep -Milliseconds 500; Get-Process astrbot -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
   ]);
   await new Promise((res) => setTimeout(res, 3000));
   const l = astrbotLauncherPath();
