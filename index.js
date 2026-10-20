@@ -416,6 +416,35 @@ function envCheck() {
   return { ok, checks };
 }
 
+/** 根据缺失的环境项，生成一段「给别的 Agent 阅读并操作」的安装指导提示词。 */
+function buildInstallPrompt(env) {
+  const missing = Object.entries(env.checks)
+    .filter(([, v]) => !v.ok)
+    .map(([k, v]) => "- " + k + "：" + v.detail)
+    .join("\n");
+  if (!missing) return "";
+  return `你是负责安装 QQBOT 环境的助手。当前机器缺少以下组件，请按步骤安装并配置（装好后让人在 DSH 设置页确认）。
+
+## 缺失项
+${missing}
+
+## 需要安装的组件
+1. AstrBot（Python 3.12 聊天引擎）：推荐 uv tool install astrbot --python 3.12；装完它的 python 在 %USERPROFILE%\\AppData\\Roaming\\uv\\tools\\astrbot\\Scripts\\python.exe
+2. NapCat（QQ 协议模块）：从 https://github.com/NapNeko/NapCatQQ/releases 下载，按官方文档注入 QQNT；产物目录含 config/webui.json
+3. QQ 客户端（QQNT）：从 https://im.qq.com 安装（若已装可跳过）
+4. Python（管理脚本用）：系统 python 或 venv 均可
+
+## 安装完成后（必须做）
+- 打开 DSH → 设置 → QQBOT → 「路径配置」，填入：astrbotDir（AstrBot 安装目录）、napcatDir（NapCat 目录）、astrbotPython（AstrBot 的 python.exe）、pythonPath（pythonw.exe）
+- 点「重新自动探测」→「保存配置」
+- 点「启动全部服务」验证；面板「环境自检」应全部变绿
+
+## 注意
+- 所有服务端口只监听 127.0.0.1，不要改。
+- 已存在的组件不要重复安装；路径填错会导致自检不通过。
+- NapCat 启动后需要在 QQ 窗口完成扫码登录，登录成功后再点「账号密码登录」。`;
+}
+
 async function status() {
   const c = cfg();
   const cmdlines = await listComponents().catch(() => "");
@@ -450,7 +479,7 @@ async function status() {
       watchdog: comp("watchdog"),
     },
     qqOnline: ports.napcat,
-    env: envCheck(),
+    env: (() => { const e = envCheck(); return { ...e, installPrompt: buildInstallPrompt(e) }; })(),
   };
 }
 

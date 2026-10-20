@@ -253,6 +253,17 @@ window.__ModuleLoader__.load({
               ),
             ])
           : null,
+        status && status.env && status.env.installPrompt
+          ? h('div', { key: 'instrompt', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+              h('div', { key: 'ih', style: { fontSize: 13, fontWeight: 600 } }, '环境不完整 · 安装提示词（复制给 Agent 让它帮你装）'),
+              h('textarea', {
+                key: 'it',
+                readOnly: true,
+                value: status.env.installPrompt,
+                style: { width: '100%', minHeight: 160, fontSize: 12, lineHeight: '18px', fontFamily: 'inherit', padding: 8 },
+              }),
+            ])
+          : null,
         h('div', { key: 'login', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
           h('div', { key: 'lh', style: { fontSize: 13, fontWeight: 600 } }, 'QQ 登录（内置）'),
           h('div', { key: 'ls', style: { fontSize: 12, opacity: 0.8 } },
