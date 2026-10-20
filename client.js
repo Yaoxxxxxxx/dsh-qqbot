@@ -244,6 +244,15 @@ window.__ModuleLoader__.load({
           btn('立即备份', () => act('/qqbot/backup', '备份')),
           btn('刷新登录状态', loadLogin),
         ]),
+        status && status.env && status.env.checks
+          ? h('div', { key: 'env', style: { display: 'flex', flexDirection: 'column', gap: 2 } }, [
+              h('div', { key: 'eh', style: { fontSize: 13, fontWeight: 600, marginBottom: 4 } }, '环境自检'),
+              ...Object.entries(status.env.checks).map(([k, v]) =>
+                h('div', { key: 'env-' + k, style: { fontSize: 12, color: v.ok ? '#6fcf97' : '#e06c75' } },
+                  (v.ok ? '✓ ' : '✗ ') + k + '：' + v.detail),
+              ),
+            ])
+          : null,
         h('div', { key: 'login', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
           h('div', { key: 'lh', style: { fontSize: 13, fontWeight: 600 } }, 'QQ 登录（内置）'),
           h('div', { key: 'ls', style: { fontSize: 12, opacity: 0.8 } },

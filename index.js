@@ -385,6 +385,37 @@ except Exception as e:
 
 // ───────────────────────── 功能实现 ─────────────────────────
 
+/** 环境自检：检查前置依赖是否齐全（缺什么在面板/启动时明确提示）。 */
+function envCheck() {
+  const c = cfg();
+  const checks = {};
+
+  const astrbotDb2 = c.astrbotDir ? join(c.astrbotDir, "data", "data_v4.db") : "";
+  const astrbotOk = Boolean(c.astrbotDir) && Boolean(astrbotDb2) && existsSync(astrbotDb2);
+  checks.astrbot = astrbotOk
+    ? { ok: true, detail: "已找到：" + c.astrbotDir }
+    : { ok: false, detail: "未找到 AstrBot（需要先安装 AstrBot，或在「路径配置」里填 astrbotDir）" };
+
+  const napcatCfg2 = c.napcatDir ? join(c.napcatDir, "config", "webui.json") : "";
+  const napcatOk = Boolean(c.napcatDir) && Boolean(napcatCfg2) && existsSync(napcatCfg2);
+  checks.napcat = napcatOk
+    ? { ok: true, detail: "已找到：" + c.napcatDir }
+    : { ok: false, detail: "未找到 NapCat（需要先安装 NapCat，或在「路径配置」里填 napcatDir）" };
+
+  const pyOk = !c.astrbotPython || c.astrbotPython === "python" || existsSync(c.astrbotPython);
+  checks.astrbotPython = pyOk
+    ? { ok: true, detail: c.astrbotPython || "python" }
+    : { ok: false, detail: "AstrBot python 不存在：" + c.astrbotPython + "（检查路径配置 astrbotPython）" };
+
+  const pywOk = !c.pythonPath || c.pythonPath === "pythonw" || c.pythonPath === "python" || existsSync(c.pythonPath);
+  checks.python = pywOk
+    ? { ok: true, detail: c.pythonPath || "pythonw" }
+    : { ok: false, detail: "管理 python 不存在：" + c.pythonPath + "（检查路径配置 pythonPath）" };
+
+  const ok = checks.astrbot.ok && checks.napcat.ok && checks.astrbotPython.ok && checks.python.ok;
+  return { ok, checks };
+}
+
 async function status() {
   const c = cfg();
   const cmdlines = await listComponents().catch(() => "");
@@ -419,6 +450,7 @@ async function status() {
       watchdog: comp("watchdog"),
     },
     qqOnline: ports.napcat,
+    env: envCheck(),
   };
 }
 
@@ -473,6 +505,15 @@ async function listQqPids() {
 async function startAll() {
   const c = cfg();
   const r = {};
+  // 环境自检：前置依赖不齐时直接报错（不硬启动，避免一堆莫名失败）
+  const env = envCheck();
+  if (!env.ok) {
+    const missing = Object.entries(env.checks)
+      .filter(([, v]) => !v.ok)
+      .map(([k, v]) => k + "：" + v.detail)
+      .join("；");
+    return { ok: false, message: "环境不完整，无法启动：", missing, checks: env.checks };
+  }
   // 启动前记录现有 QQ PID（用户日常 QQ 可能有多个），用于识别「BOT 新起的 QQ」
   let beforeQq = [];
   try {
