@@ -150,3 +150,49 @@ NapCat 的启动器（`launcher.bat`）需要管理员权限。插件启动时�
 **装了**：BOT 能记日程、查历史、按时提醒。
 
 MCP 文件：`extras/mcp_xiaojing.py`（薄包装）+ `extras/mcp_core.py`（核心逻辑，已做路径通用化，用环境变量 `XIAOJING_BASE` 指定数据目录）。
+
+---
+
+## 🧠 BOT 模型配置（AstrBot 的 provider）
+
+BOT 用哪个大模型，**不在本插件里配**，在 AstrBot 里配。本插件只负责管理 AstrBot/NapCat 的启停和登录。
+
+### 配在哪
+- **配置文件**：`<AstrBot目录>/data/cmd_config.json`
+- **AstrBot 面板**：浏览器打开 `http://127.0.0.1:6185` → 模型设置（更直观）
+
+### 关键字段
+```json
+{
+  "provider_sources": [
+    {
+      "id": "my_source",
+      "type": "openai_chat_completion",
+      "key": ["你的API_KEY"],
+      "api_base": "https://api.deepseek.com/v1",
+      "timeout": 120
+    }
+  ],
+  "provider": [
+    {
+      "id": "my_model",
+      "enable": true,
+      "provider_source_id": "my_source",
+      "model": "deepseek-chat"
+    }
+  ]
+}
+```
+- `api_base` + `key`：你的模型服务（DeepSeek / OpenAI / 通义 / 本地 vLLM 都行，只要是 OpenAI 兼容接口）
+- `model`：模型名
+- **改完重启 AstrBot** 生效
+
+### 常见选择
+- DeepSeek：`api_base: https://api.deepseek.com/v1`，`model: deepseek-chat`
+- OpenAI：`api_base: https://api.openai.com/v1`，`model: gpt-4o-mini`
+- 本地（Ollama/vLLM）：`api_base: http://127.0.0.1:11434/v1`，`model: 你的模型名`
+- 学校/自建网关：填对应 `api_base` 和 `key`
+
+### 注意
+- 插件不碰模型配置——换模型不会影响插件的管理功能
+- 如果 BOT 回复慢，先看模型 API 是否慢（`request_max_retries` 默认 5 次重试会放大延迟）
