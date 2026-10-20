@@ -640,6 +640,30 @@ async function restartNapcat() {
   return false;
 }
 
+/** 重启 AstrBot（修改人设后使其生效；也可由「保存人设」自动调用）。 */
+async function restartAstrbot() {
+  const c = cfg();
+  await run("powershell", [
+    "-NoProfile",
+    "-Command",
+    "Get-Process astrbot -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue",
+  ]);
+  await new Promise((res) => setTimeout(res, 3000));
+  const l = astrbotLauncherPath();
+  if (existsSync(l)) {
+    spawn("wscript.exe", ["//B", l], { cwd: c.astrbotDir, windowsHide: true, detached: true, stdio: "ignore" }).unref();
+  } else {
+    const exe = join(homedir(), ".local", "bin", "astrbot.exe");
+    if (!existsSync(exe)) return false;
+    spawn(exe, ["run"], { cwd: c.astrbotDir, windowsHide: true, detached: true, stdio: "ignore" }).unref();
+  }
+  for (let i = 0; i < 30; i++) {
+    await new Promise((res) => setTimeout(res, 1500));
+    if (await portOpen(c.astrbotWsPort)) return true;
+  }
+  return false;
+}
+
 async function startAll() {
   const c = cfg();
   const r = {};
@@ -1092,7 +1116,9 @@ function registerTools(tools) {
       parameters: { system_prompt: { type: "string", required: true, description: "完整人设文本" } },
       output: { schema: { type: "string" }, render: (_a, v) => [{ type: "text", text: v }] },
       async execute(args) {
-        return JSON.stringify(await personaSave(String(args?.system_prompt ?? "")));
+        const r = await personaSave(String(args?.system_prompt ?? ""));
+        if (r && r.ok) await restartAstrbot().catch(() => {});
+        return JSON.stringify(r);
       },
     }),
   );
@@ -1265,6 +1291,10 @@ function apply(ctx) {
               return;
             }
             if (p === "/qqbot/persona" && m === "GET") return sendJson(res, 200, await personaGet());
+            if (p === "/qqbot/restart" && m === "POST") {
+              const ok = await restartAstrbot();
+              return sendJson(res, 200, { ok, message: ok ? "AstrBot 已重启" : "重启失败" });
+            }
             if (p === "/qqbot/update" && m === "GET") {
               let version = "unknown";
               try {
@@ -1286,7 +1316,9 @@ function apply(ctx) {
               req.on("end", async () => {
                 try {
                   const { system_prompt } = JSON.parse(body || "{}");
-                  sendJson(res, 200, await personaSave(String(system_prompt ?? "")));
+                  const r = await personaSave(String(system_prompt ?? ""));
+                if (r && r.ok) await restartAstrbot().catch(() => {});
+                sendJson(res, 200, r);
                 } catch (e) {
                   sendJson(res, 400, { ok: false, message: String(e) });
                 }

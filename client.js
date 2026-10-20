@@ -174,6 +174,15 @@ window.__ModuleLoader__.load({
         setBusy(false);
       };
 
+      const restartAstrbotBtn = async () => {
+        setBusy(true);
+        setNotice('重启 AstrBot 中（会断几秒）…');
+        const r = await fetchJson('/qqbot/restart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        setNotice(r && r.ok ? 'AstrBot 已重启' : '重启失败：' + JSON.stringify(r).slice(0, 120));
+        setBusy(false);
+        setTimeout(refresh, 3000);
+      };
+
       const act = async (url, label) => {
         setBusy(true);
         setNotice(label + '…');
@@ -386,6 +395,7 @@ window.__ModuleLoader__.load({
           }),
           h('div', { key: 'pb', style: { display: 'flex', gap: 8 } }, [
             btn('保存人设', savePersona),
+              btn('重启 AstrBot', restartAstrbotBtn),
             btn('重新读取', () => fetchJson('/qqbot/persona').then((p) => p && typeof p.system_prompt === 'string' && setPersona(p.system_prompt))),
           ]),
         ]),
