@@ -1,0 +1,5 @@
+# dsh-qqbot — QQBOT 管理插件
+# 手工铺装：本文件提供挂载行；profile 的 cordis.patch.yml 也 insert 同一行。
+- insert:
+    - id: qqbot
+      name: dsh-qqbot

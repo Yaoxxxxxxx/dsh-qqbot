@@ -1,0 +1,29 @@
+{
+  "name": "dsh-qqbot",
+  "version": "0.2.0",
+  "description": "QQBOT 管理插件：AstrBot/NapCat 一键安装、登录二维码、服务管理、人设编辑（保存即生效）、自动备份、状态面板",
+  "type": "module",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "cordis": "*"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  }
+}
