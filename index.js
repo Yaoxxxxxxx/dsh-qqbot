@@ -570,7 +570,55 @@ async function wsConnected() {
 }
 
 /** 重启 NapCat（让 NapCat 重新连 AstrBot 的 ws）；最多等 60 秒确认连上。 */
+/** 自动修正 NapCat 的 ws_reverse url 为 AstrBot 4.29 的 /ws 路径（不带 /ws 会 405 连不上）。 */
+async function fixNapcatWsUrl() {
+  const c = cfg();
+  const token = napcatToken();
+  if (!token) return false;
+  const py = c.astrbotPython || "python";
+  const port = napcatWebPort();
+  const wsPort = c.astrbotWsPort || 6199;
+  const tmp = join(tmpdir(), "qqbot_fix_ws.py");
+  const script = `import sys,hashlib,json,urllib.request
+sys.stdout.reconfigure(encoding="utf-8")
+BASE="http://127.0.0.1:${port}"
+def req(path,body=None,cred=None):
+    h={"Content-Type":"application/json"}
+    if cred: h["Authorization"]="Bearer "+cred
+    r=urllib.request.Request(BASE+path,data=json.dumps(body or {}).encode(),headers=h,method="POST")
+    return urllib.request.urlopen(r,timeout=8).read().decode()
+hh=hashlib.sha256((${JSON.stringify(token)}+".napcat").encode()).hexdigest()
+cred=json.loads(req("/api/auth/login",{"hash":hh,"totpCode":""})).get("data",{}).get("Credential","")
+if not cred:
+    print("NO_CRED"); sys.exit(0)
+d=json.loads(req("/api/OB11Config/GetConfig",{},cred)).get("data",{})
+changed=False
+for cl in d.get("network",{}).get("websocketClients",[]):
+    u=str(cl.get("url",""))
+    if "${wsPort}" in u and not u.rstrip("/").endswith("/ws"):
+        cl["url"]="ws://127.0.0.1:${wsPort}/ws"; changed=True
+if changed:
+    print(req("/api/OB11Config/SetConfig",{"config":json.dumps(d,ensure_ascii=False)},cred)[:80])
+else:
+    print("NO_CHANGE")
+`;
+  try {
+    writeFileSync(tmp, script, "utf-8");
+    const r = await run(py, [tmp]);
+    const out = r.out || "";
+    return out.includes("success") || out.includes("NO_CHANGE");
+  } catch {
+    return false;
+  } finally {
+    try {
+      unlinkSync(tmp);
+    } catch {}
+  }
+}
+
 async function restartNapcat() {
+  // 先把 ws url 修正为 AstrBot 4.29 的 /ws 路径（旧配置可能缺 /ws → 405）
+  await fixNapcatWsUrl().catch(() => {});
   // 杀所有 NapCat 启动器（不管有没有保护，先普通杀，杀不掉再管理员）
   await run("powershell", [
     "-NoProfile",
