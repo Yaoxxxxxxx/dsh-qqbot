@@ -5,7 +5,7 @@
  * 所有环境相关的值来自 Config（可配置），留空时自动探测：
  *   - napcatDir    NapCat 安装目录（含 config/webui.json）
  *   - astrbotDir   AstrBot 安装目录（含 data/data_v4.db）
- *   - kiraraDir    小鲸扩展脚本目录（reminder.py 等，没有就只用 AstrBot）
+ *   - kiraraDir    扩展脚本目录（reminder.py 等，没有就只用 AstrBot）
  *   - pythonPath   管理脚本用的 pythonw/python
  *   - astrbotPython AstrBot 自带的 python（留空用系统 python）
  *   - qqNumber     登录的 QQ 号（留空从 NapCat 配置 autoLoginAccount 读）
@@ -158,7 +158,7 @@ function detectConfig(cfg) {
     ]);
   }
 
-  // 小鲸扩展脚本：标记 memory_sync.py 或 reminder.py
+  // 扩展脚本：标记 memory_sync.py 或 reminder.py
   if (!out.kiraraDir) {
     out.kiraraDir = findDirWith("memory_sync.py", ["D:\\KiraraBot", join(home, "KiraraBot"), join(cwd, "KiraraBot")]);
     if (!out.kiraraDir) out.kiraraDir = findDirWith("reminder.py", ["D:\\KiraraBot", join(home, "KiraraBot"), join(cwd, "KiraraBot")]);

@@ -220,7 +220,7 @@ window.__ModuleLoader__.load({
       return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 760 } }, [
         h('h2', { key: 't', style: { margin: 0, fontSize: 18, fontWeight: 600 } }, 'QQBOT'),
         h('p', { key: 'd', style: { margin: 0, fontSize: 12, opacity: 0.7 } },
-          '小鲸（QQ BOT）：AstrBot + NapCat 状态管理 · 人设编辑 · 备份 · 登录二维码。所有端口仅监听本机。'),
+          'QQ BOT：AstrBot + NapCat 状态管理 · 人设编辑 · 备份 · 登录二维码。所有端口仅监听本机。'),
         status && status.error
           ? h('div', { key: 'err', style: { color: '#e06c75', fontSize: 12 } }, '状态读取失败：' + status.error)
           : null,
